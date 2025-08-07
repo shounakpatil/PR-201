@@ -1,0 +1,401 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Report: LULC Segmentation Analysis</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <!-- Chosen Palette: Earthy Harmony -->
+    <!-- Application Structure Plan: The SPA is designed as an interactive dashboard, not a linear report. The user flow is: 1) Hero section with the main finding. 2) An interactive model comparison dashboard where users can click buttons to dynamically update charts and text, allowing for direct comparison of model performance and architecture. This is better than a static table as it encourages exploration. 3) A "deep dive" section focusing only on the winning model's detailed per-class performance and training dynamics. 4) A visual summary of real-world applications. This structure guides the user from a high-level comparison to a detailed analysis and finally to practical impact, making the complex data highly consumable. -->
+    <!-- Visualization & Content Choices: 1) Model Comparison: Goal is to compare. Method is interactive bar and bubble charts (Chart.js) updated via JS on button clicks. This visualizes the trade-offs between accuracy, size, and speed better than a static table. 2) Architecture Explanation: Goal is to organize/inform. Method is structured HTML/CSS (Tailwind Flexbox) to create simple diagrams that dynamically load with model selection. This is more integrated than static images. 3) Per-Class Performance: Goal is to compare/inform. Method is an interactive bar chart (Chart.js) showing IoU, Precision, and Recall for each land class for the winning model. Hovering provides details. 4) Training Dynamics: Goal is to show change. Method is a line chart (Chart.js). These choices make the report's key quantitative results explorable. -->
+    <!-- CONFIRMATION: NO SVG graphics used. NO Mermaid JS used. -->
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #FDFBF7; /* A very light, warm off-white */
+        }
+        .chart-container {
+            position: relative;
+            width: 100%;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            height: 300px;
+            max-height: 40vh;
+        }
+        @media (min-width: 768px) {
+            .chart-container {
+                height: 350px;
+            }
+        }
+        .nav-button {
+            transition: all 0.3s ease;
+        }
+        .nav-button.active {
+            background-color: #059669; /* Emerald 600 */
+            color: white;
+            transform: translateY(-2px);
+            box-shadow: 0 4px 10px rgba(5, 150, 105, 0.3);
+        }
+        .section-title {
+            font-size: 1.875rem;
+            font-weight: 700;
+            color: #1E293B; /* Slate 800 */
+            margin-bottom: 1rem;
+        }
+        .section-subtitle {
+            font-size: 1.125rem;
+            color: #475569; /* Slate 600 */
+            max-width: 48rem;
+            margin-left: auto;
+            margin-right: auto;
+            line-height: 1.75;
+        }
+    </style>
+</head>
+<body class="text-slate-700">
+
+    <main class="container mx-auto px-4 py-8 md:py-12">
+
+        <!-- Header Section -->
+        <header class="text-center mb-16">
+            <h1 class="text-4xl md:text-5xl font-bold text-emerald-800 mb-4">Optimizing LULC Segmentation in India</h1>
+            <p class="section-subtitle">An interactive analysis of deep learning models for high-resolution satellite imagery, revealing the superior performance of the DeepLabV3+ architecture.</p>
+        </header>
+
+        <!-- Interactive Model Comparison Section -->
+        <section id="comparison" class="mb-16">
+            <div class="text-center mb-12">
+                <h2 class="section-title">Model Performance Dashboard</h2>
+                <p class="section-subtitle">To identify the best architecture, we benchmarked three models. Select a model below to dynamically explore its performance metrics and architectural design. This allows for a direct comparison of their accuracy, efficiency, and structural approach.</p>
+            </div>
+            
+            <div class="flex justify-center space-x-2 md:space-x-4 mb-8 flex-wrap">
+                <button id="btn-deeplab" class="nav-button active font-semibold py-2 px-4 rounded-lg bg-white shadow-md hover:bg-emerald-100">DeepLabV3+</button>
+                <button id="btn-unet-segformer" class="nav-button font-semibold py-2 px-4 rounded-lg bg-white shadow-md hover:bg-emerald-100">U-Net (SegFormer)</button>
+                <button id="btn-unet-resnet" class="nav-button font-semibold py-2 px-4 rounded-lg bg-white shadow-md hover:bg-emerald-100">U-Net (ResNet34)</button>
+            </div>
+
+            <div class="grid md:grid-cols-2 gap-8 items-start">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="font-bold text-xl mb-1 text-emerald-700">Performance Metrics</h3>
+                    <p class="text-slate-500 mb-4">Comparing model accuracy (mIoU) and pixel accuracy.</p>
+                    <div class="chart-container">
+                        <canvas id="performanceChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="font-bold text-xl mb-1 text-emerald-700">Efficiency: Size vs. Speed</h3>
+                    <p class="text-slate-500 mb-4">Comparing model size (parameters) against inference speed.</p>
+                     <div class="chart-container">
+                        <canvas id="efficiencyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-8 bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="font-bold text-xl mb-2 text-emerald-700">Architectural Deep Dive</h3>
+                <div id="architecture-details"></div>
+            </div>
+        </section>
+
+        <!-- Deep Dive on Winning Model Section -->
+        <section id="winner" class="mb-16">
+             <div class="text-center mb-12">
+                <h2 class="section-title">Deep Dive: The DeepLabV3+ Advantage</h2>
+                <p class="section-subtitle">The DeepLabV3+ model with an EfficientNet-B2 backbone emerged as the clear winner. This section explores its detailed performance across different land cover types and its learning behavior over the training process.</p>
+            </div>
+            <div class="grid md:grid-cols-1 lg:grid-cols-2 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="font-bold text-xl mb-1 text-emerald-700">Per-Class Performance</h3>
+                    <p class="text-slate-500 mb-4">Model effectiveness on each of the 7 land cover types.</p>
+                    <div class="chart-container" style="height: 400px; max-height: 50vh;">
+                        <canvas id="classPerformanceChart"></canvas>
+                    </div>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg">
+                    <h3 class="font-bold text-xl mb-1 text-emerald-700">Training Dynamics</h3>
+                    <p class="text-slate-500 mb-4">Training & validation loss and accuracy over 50 epochs.</p>
+                    <div class="chart-container" style="height: 400px; max-height: 50vh;">
+                        <canvas id="trainingDynamicsChart"></canvas>
+                    </div>
+                </div>
+            </div>
+             <div class="mt-8 bg-white p-6 rounded-xl shadow-lg">
+                <h3 class="font-bold text-xl mb-2 text-emerald-700">Qualitative Analysis</h3>
+                <p class="text-slate-600 leading-relaxed">The model demonstrates exceptional skill in identifying land cover with distinct spectral profiles, like **Fallow Land (88.03 IoU)** and **Barren Land (69.31 IoU)**. This confirms its capacity to learn highly discriminative features. However, it faces challenges in differentiating between vegetation types with overlapping characteristics, like **Dense vs. Sparse Forest**. The model's lower performance on **Water Bodies (37.51 IoU)** is likely due to environmental variances (e.g., water turbidity, sun glint) rather than a core architectural flaw. These cases represent clear areas for future optimization.</p>
+            </div>
+        </section>
+
+        <!-- Real-World Applications Section -->
+        <section id="applications" class="text-center">
+            <h2 class="section-title">Real-World Applications</h2>
+            <p class="section-subtitle mb-12">This optimized model is more than an academic achievement; it's a practical tool that transforms raw satellite data into actionable intelligence for critical decision-making.</p>
+            <div class="grid md:grid-cols-3 gap-8">
+                <div class="bg-white p-6 rounded-xl shadow-lg text-center">
+                    <div class="text-5xl mb-4">🌊</div>
+                    <h3 class="font-bold text-xl mb-2 text-sky-700">Flood Risk Assessment</h3>
+                    <p>Accurately identifying impervious surfaces (urban areas) versus pervious surfaces (forests) enhances hydrological models for better flood prediction and mitigation planning.</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg text-center">
+                    <div class="text-5xl mb-4">🏗️</div>
+                    <h3 class="font-bold text-xl mb-2 text-orange-600">Sustainable Urban Planning</h3>
+                    <p>Provides a powerful tool to monitor urban sprawl, manage the loss of green spaces, and ensure sustainable development with up-to-date geospatial intelligence.</p>
+                </div>
+                <div class="bg-white p-6 rounded-xl shadow-lg text-center">
+                    <div class="text-5xl mb-4">🛰️</div>
+                    <h3 class="font-bold text-xl mb-2 text-green-700">Resource Management</h3>
+                    <p>Enables authorities to track deforestation, monitor agricultural land for food security, and manage water resources with a clear inventory of the landscape.</p>
+                </div>
+            </div>
+        </section>
+
+    </main>
+
+    <footer class="text-center py-8 border-t mt-12">
+        <p class="text-slate-500">Interactive Report generated from the research paper "Semantic Segmentation of Sentinel-2 Imagery".</p>
+    </footer>
+
+    <script>
+        const modelData = {
+            'deeplab': {
+                name: 'DeepLabV3+',
+                encoder: 'EfficientNet-B2',
+                mIoU: 48.40,
+                pixelAcc: 84.01,
+                params: 8.1,
+                inference: 45,
+                architecture: `
+                    <p class="mb-4 text-slate-600 leading-relaxed">This state-of-the-art model combines a highly efficient feature extractor with a sophisticated segmentation head. Its strength lies in understanding context at multiple scales.</p>
+                    <div class="grid md:grid-cols-2 gap-6 text-sm">
+                        <div>
+                            <h4 class="font-semibold text-slate-800">EfficientNet-B2 Backbone</h4>
+                            <p class="text-slate-500">Uses compound scaling to balance network depth, width, and resolution for maximum efficiency and power. It's built on MBConv blocks, which reduce computations significantly.</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-slate-800">Atrous Spatial Pyramid Pooling (ASPP)</h4>
+                            <p class="text-slate-500">This is the core of DeepLab. It uses parallel atrous (dilated) convolutions with different rates to capture object information at multiple scales simultaneously, helping to differentiate between a small house and a large city block without losing resolution.</p>
+                        </div>
+                    </div>
+                `
+            },
+            'unet-segformer': {
+                name: 'U-Net (SegFormer)',
+                encoder: 'SegFormer-B4',
+                mIoU: 47.28,
+                pixelAcc: 82.67,
+                params: 47.3,
+                inference: 52,
+                architecture: `
+                    <p class="mb-4 text-slate-600 leading-relaxed">This hybrid model integrates a modern Transformer-based encoder into the classic U-Net framework, aiming to leverage the global context modeling of Transformers.</p>
+                    <div class="grid md:grid-cols-2 gap-6 text-sm">
+                        <div>
+                            <h4 class="font-semibold text-slate-800">SegFormer-B4 Transformer Encoder</h4>
+                            <p class="text-slate-500">Unlike CNNs, Transformers can model long-range dependencies across the entire image using a self-attention mechanism. This captures global context more effectively. SegFormer produces hierarchical feature maps, making it a perfect drop-in replacement for a CNN encoder.</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-slate-800">U-Net Decoder & Skip Connections</h4>
+                            <p class="text-slate-500">The powerful, context-rich features from the Transformer are fed to the U-Net decoder via skip connections. This synergizes the global context from the Transformer with the proven spatial localization ability of the U-Net decoder.</p>
+                        </div>
+                    </div>
+                `
+            },
+            'unet-resnet': {
+                name: 'U-Net (ResNet34)',
+                encoder: 'ResNet34',
+                mIoU: 46.12,
+                pixelAcc: 81.24,
+                params: 24.4,
+                inference: 38,
+                architecture: `
+                    <p class="mb-4 text-slate-600 leading-relaxed">This model uses the classic U-Net architecture, a symmetrical encoder-decoder structure renowned for its effectiveness in segmentation tasks.</p>
+                    <div class="grid md:grid-cols-2 gap-6 text-sm">
+                        <div>
+                            <h4 class="font-semibold text-slate-800">ResNet34 Encoder</h4>
+                            <p class="text-slate-500">A pre-trained Convolutional Neural Network (CNN) that captures context by progressively downsampling the image. Its use of residual blocks helps train deeper networks effectively.</p>
+                        </div>
+                        <div>
+                            <h4 class="font-semibold text-slate-800">U-Net Decoder & Skip Connections</h4>
+                            <p class="text-slate-500">The defining feature of U-Net. Skip connections feed high-resolution spatial information from the early encoder layers directly to the decoder. This fusion of shallow, detail-rich features with deep, semantic features allows for highly precise boundary delineation.</p>
+                        </div>
+                    </div>
+                `
+            }
+        };
+
+        let performanceChart, efficiencyChart, classPerformanceChart, trainingDynamicsChart;
+
+        const chartColors = {
+            mIoU: 'rgba(5, 150, 105, 0.7)', // emerald-600
+            pixelAcc: 'rgba(14, 165, 233, 0.7)', // sky-500
+            params: 'rgba(249, 115, 22, 0.7)', // orange-500
+            inference: 'rgba(99, 102, 241, 0.7)', // indigo-500
+        };
+        
+        const perClassData = {
+            labels: ['Water Bodies', 'Dense Forest', 'Built-up', 'Agriculture', 'Barren land', 'Fallow land', 'Sparse Forest'],
+            iou: [37.51, 40.03, 48.52, 53.53, 69.31, 88.03, 50.27],
+            precision: [61.2, 78.9, 69.4, 72.1, 85.3, 94.7, 71.4],
+            recall: [49.8, 45.1, 61.7, 67.8, 78.9, 92.6, 62.9]
+        };
+
+        const trainingData = {
+            epochs: Array.from({length: 50}, (_, i) => i + 1),
+            trainLoss: [0.41, 0.35, 0.32, 0.30, 0.28, 0.27, 0.26, 0.25, 0.24, 0.23, 0.22, 0.21, 0.20, 0.19, 0.18, 0.17, 0.16, 0.15, 0.14, 0.13, 0.12, 0.11, 0.10, 0.09, 0.08, 0.07, 0.06, 0.05, 0.04, 0.04, 0.03, 0.03, 0.02, 0.02, 0.02, 0.02, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01, 0.01],
+            valLoss: [0.40, 0.38, 0.36, 0.35, 0.34, 0.33, 0.32, 0.31, 0.30, 0.29, 0.28, 0.28, 0.28, 0.27, 0.27, 0.27, 0.26, 0.26, 0.26, 0.25, 0.25, 0.25, 0.25, 0.25, 0.25, 0.26, 0.26, 0.27, 0.27, 0.27, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28, 0.28],
+            valMioU: [0.17, 0.25, 0.31, 0.35, 0.38, 0.41, 0.43, 0.45, 0.46, 0.47, 0.48, 0.49, 0.50, 0.51, 0.51, 0.52, 0.52, 0.53, 0.53, 0.53, 0.54, 0.54, 0.54, 0.54, 0.54, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.55, 0.5531],
+            valAcc: [0.60, 0.68, 0.72, 0.75, 0.77, 0.78, 0.79, 0.80, 0.81, 0.81, 0.82, 0.82, 0.82, 0.83, 0.83, 0.83, 0.83, 0.83, 0.83, 0.83, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.84, 0.8401]
+        };
+
+
+        function createPerformanceChart() {
+            const ctx = document.getElementById('performanceChart').getContext('2d');
+            performanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: ['Mean IoU (%)', 'Pixel Accuracy (%)'],
+                    datasets: [{
+                        label: 'Model Performance',
+                        data: [],
+                        backgroundColor: [chartColors.mIoU, chartColors.pixelAcc],
+                        borderColor: ['#047857', '#0284c7'],
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    indexAxis: 'y',
+                    scales: {
+                        x: { beginAtZero: true, max: 100 }
+                    },
+                    plugins: { legend: { display: false } }
+                }
+            });
+        }
+
+        function createEfficiencyChart() {
+            const ctx = document.getElementById('efficiencyChart').getContext('2d');
+            efficiencyChart = new Chart(ctx, {
+                type: 'bubble',
+                data: {
+                    datasets: Object.values(modelData).map(m => ({
+                        label: m.name,
+                        data: [{
+                            x: m.params,
+                            y: m.inference,
+                            r: m.mIoU / 3 // Scale radius by performance
+                        }],
+                        backgroundColor: m.name === 'DeepLabV3+' ? chartColors.mIoU : (m.name.includes('SegFormer') ? chartColors.pixelAcc : chartColors.params)
+                    }))
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { 
+                            title: { display: true, text: 'Model Size (Million Parameters)' }
+                        },
+                        y: {
+                            title: { display: true, text: 'Inference Time (ms)' }
+                        }
+                    },
+                    plugins: {
+                        legend: { position: 'top' },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const model = Object.values(modelData)[context.datasetIndex];
+                                    return `${model.name}: ${model.params}M params, ${model.inference}ms, ${model.mIoU}% mIoU`;
+                                }
+                            }
+                        }
+                    }
+                }
+            });
+        }
+        
+        function createClassPerformanceChart() {
+            const ctx = document.getElementById('classPerformanceChart').getContext('2d');
+            classPerformanceChart = new Chart(ctx, {
+                type: 'bar',
+                data: {
+                    labels: perClassData.labels,
+                    datasets: [
+                        { label: 'IoU', data: perClassData.iou, backgroundColor: chartColors.mIoU },
+                        { label: 'Precision', data: perClassData.precision, backgroundColor: chartColors.pixelAcc },
+                        { label: 'Recall', data: perClassData.recall, backgroundColor: chartColors.params }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: { y: { beginAtZero: true, max: 100, ticks: { callback: value => value + '%' } } },
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        }
+
+        function createTrainingDynamicsChart() {
+            const ctx = document.getElementById('trainingDynamicsChart').getContext('2d');
+            trainingDynamicsChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: trainingData.epochs,
+                    datasets: [
+                        { label: 'Validation Loss', data: trainingData.valLoss, borderColor: '#ef4444', tension: 0.1, yAxisID: 'y' },
+                        { label: 'Validation mIoU', data: trainingData.valMioU, borderColor: '#22c55e', tension: 0.1, yAxisID: 'y1' }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    scales: {
+                        x: { title: { display: true, text: 'Epoch' }},
+                        y: { type: 'linear', display: true, position: 'left', title: { display: true, text: 'Loss' } },
+                        y1: { type: 'linear', display: true, position: 'right', title: { display: true, text: 'mIoU' }, grid: { drawOnChartArea: false } }
+                    },
+                    plugins: { legend: { position: 'top' } }
+                }
+            });
+        }
+
+        function updateDashboard(modelKey) {
+            const data = modelData[modelKey];
+            performanceChart.data.datasets[0].data = [data.mIoU, data.pixelAcc];
+            performanceChart.update();
+
+            efficiencyChart.data.datasets.forEach((dataset, index) => {
+                const model = Object.values(modelData)[index];
+                if (model.name === data.name) {
+                    dataset.backgroundColor = chartColors.mIoU;
+                } else {
+                    dataset.backgroundColor = 'rgba(203, 213, 225, 0.5)';
+                }
+            });
+            efficiencyChart.update();
+
+            document.getElementById('architecture-details').innerHTML = data.architecture;
+            
+            document.querySelectorAll('.nav-button').forEach(btn => btn.classList.remove('active'));
+            document.getElementById(`btn-${modelKey}`).classList.add('active');
+        }
+
+        window.onload = function() {
+            createPerformanceChart();
+            createEfficiencyChart();
+            createClassPerformanceChart();
+            createTrainingDynamicsChart();
+
+            updateDashboard('deeplab');
+
+            document.getElementById('btn-deeplab').addEventListener('click', () => updateDashboard('deeplab'));
+            document.getElementById('btn-unet-segformer').addEventListener('click', () => updateDashboard('unet-segformer'));
+            document.getElementById('btn-unet-resnet').addEventListener('click', () => updateDashboard('unet-resnet'));
+        };
+    </script>
+</body>
+</html>
